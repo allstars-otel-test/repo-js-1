@@ -1,23 +1,39 @@
 const http = require('http');
-const { promisify } = require('util');
+const server = require('./server'); // Ensure server.js exports the server
 
 const hostname = '127.0.0.1';
 const port = 3000;
-const server = require('./server');
 
-const get = promisify(http.get);
+// Refactor the server to allow for manual start and shutdown
+let httpServer;
+
+// Start the server before running any tests
+beforeAll(done => {
+  httpServer = server.listen(port, hostname, () => {
+    console.log(`Test server running at http://${hostname}:${port}/`);
+    done(); // Signal Jest to proceed with testing once the server is up
+  });
+});
+
+// Shut down the server after all tests are done
+afterAll(done => {
+  httpServer.close(() => {
+    console.log('Test server closed');
+    done(); // Signal Jest that cleaning up is complete and it can exit
+  });
+});
 
 test('responds to requests', async () => {
-  server.listen(port, hostname);
-  const response = await get(`http://${hostname}:${port}/`);
+  const response = await new Promise(resolve => {
+    http.get(`http://${hostname}:${port}/`, resolve);
+  });
+
+  expect(response.statusCode).toBe(200);
+
   let data = '';
-
-  response.on('data', (chunk) => {
+  for await (const chunk of response) {
     data += chunk;
-  });
+  }
 
-  response.on('end', () => {
-    expect(data).toBe('Hello, World!\n');
-    server.close();
-  });
+  expect(data).toBe('Hello, World from Repo-1!\n');
 });
